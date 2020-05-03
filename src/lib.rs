@@ -111,6 +111,8 @@ impl FromStr for ServiceEntry {
 }
 
 /// Parse a file using the format described in `man services(5)`
+/// if ignore_errs is true, then all parsing errors will be ignored. This is needed on some systems
+/// which don't entirely respect the format in services(5) and omit a service name
 pub fn parse_file(path: &Path, ignore_errs: bool) -> Result<Vec<ServiceEntry>, &'static str> {
     if !path.exists() || !path.is_file() {
         return Err("File does not exist or is not a regular file");
