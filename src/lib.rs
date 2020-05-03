@@ -72,7 +72,6 @@ impl FromStr for ServiceEntry {
 
         let port = port_and_protocol.next().unwrap();
         if is_comment(port) {
-            println!("ERROR! {}", s);
             return Err("Could not find port and protocol field");
         }
         let port = port.parse::<usize>();
