@@ -63,13 +63,6 @@ impl FromStr for ServiceEntry {
         if is_comment(&name) {
             return Err("Malformed input");
         }
-        println!(
-            "For line '{}' {} found service '{}' {}",
-            s,
-            s.len(),
-            &name,
-            name.len()
-        );
 
         let port_and_protocol = service.next();
         if port_and_protocol.is_none() {
@@ -79,6 +72,7 @@ impl FromStr for ServiceEntry {
 
         let port = port_and_protocol.next().unwrap();
         if is_comment(port) {
+            println!("ERROR! {}", s);
             return Err("Could not find port and protocol field");
         }
         let port = port.parse::<usize>();
@@ -117,7 +111,7 @@ impl FromStr for ServiceEntry {
 }
 
 /// Parse a file using the format described in `man services(5)`
-pub fn parse_file(path: &Path) -> Result<Vec<ServiceEntry>, &'static str> {
+pub fn parse_file(path: &Path, ignore_errs: bool) -> Result<Vec<ServiceEntry>, &'static str> {
     if !path.exists() || !path.is_file() {
         return Err("File does not exist or is not a regular file");
     }
@@ -156,7 +150,9 @@ pub fn parse_file(path: &Path) -> Result<Vec<ServiceEntry>, &'static str> {
                 entries.push(entry);
             }
             Err(msg) => {
-                return Err(msg);
+                if !ignore_errs {
+                    return Err(msg);
+                }
             }
         };
     }
@@ -165,8 +161,8 @@ pub fn parse_file(path: &Path) -> Result<Vec<ServiceEntry>, &'static str> {
 }
 
 /// Parse /etc/services
-pub fn parse_servicefile() -> Result<Vec<ServiceEntry>, &'static str> {
-    parse_file(&Path::new("/etc/services"))
+pub fn parse_servicefile(ignore_errs: bool) -> Result<Vec<ServiceEntry>, &'static str> {
+    parse_file(&Path::new("/etc/services"), ignore_errs)
 }
 
 #[cfg(test)]
@@ -228,7 +224,7 @@ mod tests {
         )
         .expect("Could not write to temp file");
         assert_eq!(
-            parse_file(&temp_path),
+            parse_file(&temp_path, false),
             Ok(vec!(
                 ServiceEntry {
                     name: "rtmp".to_string(),
@@ -290,7 +286,7 @@ mod tests {
 
         write!(file, "service\n").expect("");
         assert_eq!(
-            parse_file(&temp_path),
+            parse_file(&temp_path, false),
             Err("Could not find port and protocol field")
         );
 
@@ -298,35 +294,43 @@ mod tests {
         file.seek(SeekFrom::Start(0)).expect("");
         write!(file, "service # 1/tcp\n").expect("");
         assert_eq!(
-            parse_file(&temp_path),
+            parse_file(&temp_path, false),
             Err("Could not find port and protocol field")
         );
 
         file.set_len(0).expect("");
         file.seek(SeekFrom::Start(0)).expect("");
         write!(file, "service  1#/tcp\n").expect("");
-        assert_eq!(parse_file(&temp_path), Err("Malformed port"));
+        assert_eq!(parse_file(&temp_path, false), Err("Malformed port"));
 
         file.set_len(0).expect("");
         file.seek(SeekFrom::Start(0)).expect("");
         write!(file, "service  1/#tcp\n").expect("");
-        assert_eq!(parse_file(&temp_path), Err("Could not find protocol"));
+        assert_eq!(
+            parse_file(&temp_path, false),
+            Err("Could not find protocol")
+        );
 
         file.set_len(0).expect("");
         file.seek(SeekFrom::Start(0)).expect("");
         write!(file, "service asdf/tcp\n").expect("");
-        assert_eq!(parse_file(&temp_path), Err("Malformed port"));
+        assert_eq!(parse_file(&temp_path, false), Err("Malformed port"));
 
         file.set_len(0).expect("");
         file.seek(SeekFrom::Start(0)).expect("");
         write!(file, "service asdf/\n").expect("");
-        assert_eq!(parse_file(&temp_path), Err("Malformed port"));
+        assert_eq!(parse_file(&temp_path, false), Err("Malformed port"));
 
         let temp_dir = Temp::new_dir().unwrap();
         let temp_dir_path = temp_dir.as_path();
         assert_eq!(
-            parse_file(&temp_dir_path),
+            parse_file(&temp_dir_path, false),
             Err("File does not exist or is not a regular file")
         );
+    }
+
+    #[test]
+    fn test_parse_servicefile() {
+        assert_eq!(parse_servicefile(true).is_ok(), true);
     }
 }
